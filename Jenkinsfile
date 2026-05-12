@@ -1,162 +1,188 @@
-pipeline {
+pipeline{
     agent any
-
-    environment {
-        DOCKER_IMAGE = "springboot-app:${BUILD_NUMBER}"
-        DOCKER_REGISTRY = "docker.io"
-        DOCKER_REPO = "your-docker-username"
-        JAVA_HOME = "/usr/lib/jvm/java-17-openjdk"
+    parameters{
+        string(name: "UPDATE", defaultValue: "update.yml")
+        string(name: "REMOVE_DB", defaultValue: "remove_db.yml")
+        string(name: "REMOVE_APP", defaultValue: "remove_app.yml")
+        string(name: "DEPLOY_DB", defaultValue: "deploydb.yml")
+        string(name: "DEPLOY_APP", defaultValue: "deploy_app.yml")
     }
-
-    options {
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        disableConcurrentBuilds()
-        timeout(time: 30, unit: 'MINUTES')
-        timestamps()
+    tools{
+        maven 'maven'
     }
-
-    stages {
-        stage('Checkout') {
-            steps {
-                echo '🔄 Checking out source code...'
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: '${GIT_BRANCH}']],
-                    userRemoteConfigs: [[url: '${GIT_REPO}']]
-                ])
-            }
-        }
-
-        stage('Build') {
-            steps {
-                echo '🔨 Building Spring Boot application...'
+    stages{
+        stage("Build"){
+            steps{
                 sh '''
-                    cd app
-                    mvn clean package -DskipTests
+                mvn clean package -DskipTests
                 '''
             }
-        }
-
-        stage('Test') {
-            steps {
-                echo '🧪 Running unit tests...'
-                sh '''
-                    cd app
-                    mvn test
-                '''
-            }
-        }
-
-        stage('Code Quality Analysis') {
-            steps {
-                echo '📊 Running SonarQube analysis...'
-                sh '''
-                    cd app
-                    mvn sonar:sonar \
-                        -Dsonar.projectKey=springboot-app \
-                        -Dsonar.sources=src \
-                        -Dsonar.host.url=${SONAR_HOST_URL} \
-                        -Dsonar.login=${SONAR_TOKEN} || true
-                '''
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                echo '🐳 Building Docker image...'
-                sh '''
-                    cd app
-                    docker build -t ${DOCKER_IMAGE} .
-                    docker tag ${DOCKER_IMAGE} ${DOCKER_REPO}/${DOCKER_IMAGE}
-                    docker tag ${DOCKER_IMAGE} ${DOCKER_REPO}/springboot-app:latest
-                '''
-            }
-        }
-
-        stage('Push to Registry') {
-            when {
-                branch 'main'
-            }
-            steps {
-                echo '📤 Pushing image to Docker Registry...'
-                withCredentials([usernamePassword(credentialsId: 'docker-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh '''
-                        echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin
-                        docker push ${DOCKER_REPO}/${DOCKER_IMAGE}
-                        docker push ${DOCKER_REPO}/springboot-app:latest
-                        docker logout
-                    '''
+            post{
+                success{
+                    echo "Build Stage Completed"
+                }
+                failure{
+                    echo "Failure to Build"
                 }
             }
         }
-
-        stage('Deploy to Dev') {
-            when {
-                branch 'develop'
-            }
-            steps {
-                echo '🚀 Deploying to Dev environment...'
+        stage("Docker build and Run"){
+            steps{
                 sh '''
-                    docker stop springboot-app-dev || true
-                    docker rm springboot-app-dev || true
-                    docker run -d \
-                        --name springboot-app-dev \
-                        -p 8080:8080 \
-                        --restart unless-stopped \
-                        ${DOCKER_IMAGE}
-                    sleep 10
-                    curl -f http://localhost:8080 || exit 1
+                docker compose up -d --build
                 '''
             }
+            post{
+                success{
+                    echo "Docker Build Stage Completed"
+                }
+                failure{
+                    echo "Failure to Docker Build and Run"
+                }
+            }  
         }
-
-        stage('Deploy to Prod') {
-            when {
-                branch 'main'
+        stage("Docker tag and Push into DockerHub"){
+            steps{
+            sh '''
+                docker commit crud dhaya
+                docker commit empdata sanjai
+                docker tag dhaya dhayananthd/app
+                docker tag sanjai dhayananthd/db
+                sleep 1
+                docker login -u dhayananthd -pDhaya9578@
+                sleep 1
+                docker push dhayananthd/app
+                docker push dhayananthd/db
+            '''
             }
-            steps {
-                echo '🚀 Deploying to Production...'
-                input 'Proceed with Production Deployment?'
+        
+        post{
+                success{
+                    echo "Snapshot successfully Taken"
+                }
+                failure{
+                    echo "Failed To Take a snapshot"
+                }
+            }
+        }
+            stage("Remove img in Master Node"){
+                steps{
                 sh '''
-                    # Example: Deploy using docker-compose or kubectl
-                    docker pull ${DOCKER_REPO}/springboot-app:latest
-                    docker stop springboot-app-prod || true
-                    docker rm springboot-app-prod || true
-                    docker run -d \
-                        --name springboot-app-prod \
-                        -p 8080:8080 \
-                        --restart unless-stopped \
-                        -e ENVIRONMENT=production \
-                        ${DOCKER_REPO}/springboot-app:latest
-                    sleep 15
-                    curl -f http://localhost:8080 || exit 1
+                docker compose down -v
+                docker system prune -af
                 '''
+                }
+                post{
+                success{
+                    echo "Docker img successfully Removed"
+                }
+                failure{
+                    echo "Failed To Remove docker img"
+                }
             }
-        }
-
-        stage('Cleanup') {
-            steps {
-                echo '🧹 Cleaning up Docker resources...'
+            }
+            stage("Update And Install"){
+                steps{
+                sshagent(['kkk-kkk']){
+                sh """
+                ansible-playbook ${params.UPDATE}
+                """
+                }
+                }
+                post{
+                success{
+                    echo "Successfully Installed"
+                }
+                failure{
+                    echo "Failed To Install"
+                }
+            }
+            }
+            stage("Remove DB Container"){
+                steps{
+                    sshagent(['kkk-kkk']){
+                sh """
+                    ansible-playbook ${params.REMOVE_DB}
+                """
+                }
+                }
+                post{
+                success{
+                    echo " successfully Removed DB "
+                }
+                failure{
+                    echo "Failed To Remove DB"
+                }
+            }
+            }
+            stage("Remove APP Container"){
+                steps{
+                    sshagent(['kkk-kkk']){
+                sh """
+                    ansible-playbook ${params.REMOVE_APP}
+                """
+                }
+                }
+                post{
+                success{
+                    echo " successfully Removed APP "
+                }
+                failure{
+                    echo "Failed To Remove APP"
+                }
+            }
+            }
+            stage("Deploy DB Container"){
+                steps{
+                    sshagent(['kkk-kkk']){
+                sh """
+                    ansible-playbook ${params.DEPLOY_DB}
+                """
+                }
+                }
+                post{
+                success{
+                    echo " successfully DB Deployed"
+                }
+                failure{
+                    echo "Failed To Deploy DB"
+                }
+            }
+            }
+            stage("Deploy APP Container"){
+                steps{
+                    sshagent(['kkk-kkk']){
+                sh """
+                    ansible-playbook ${params.DEPLOY_APP}
+                """
+                }
+                }
+                post{
+                success{
+                    echo " successfully APP Deployed"
+                }
+                failure{
+                    echo "Failed To Deploy APP"
+                }
+            }
+    }
+    stage("Remove Img"){
+                steps{
+                    sshagent(['kkk-kkk']){
                 sh '''
-                    docker image prune -af --filter "until=240h" || true
+                    ansible prod -u ansible -m shell -a "docker rmi -f dhayananthd/app  dhayananthd/db" -b
                 '''
+                }
+                }
+                post{
+                success{
+                    echo " successfully Image Removed"
+                }
+                failure{
+                    echo "Failed To remove Image"
+                }
             }
-        }
     }
 
-    post {
-        success {
-            echo '✅ Pipeline completed successfully!'
-            // Send success notification
-        }
-        failure {
-            echo '❌ Pipeline failed!'
-            // Send failure notification
-        }
-        always {
-            echo '📋 Archiving results...'
-            junit 'app/target/surefire-reports/*.xml' || true
-            archiveArtifacts artifacts: 'app/target/*.jar', allowEmptyArchive: true
-        }
-    }
+}
 }
