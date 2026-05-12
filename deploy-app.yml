@@ -1,0 +1,12 @@
+---
+- hosts: dev
+  become: yes
+
+  tasks:
+
+    - name: Pull Docker Image
+      shell: docker pull divya2057/springboot-app:latest
+
+    - name: Run Spring Boot Container
+      shell: |
+        docker run -it -d --name springboot-app --network spring-network -p 8085:8085 divya2057/springboot-app

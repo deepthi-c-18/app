@@ -1,0 +1,12 @@
+---
+- name: remove db
+  hosts: dev
+  user: ansible
+  becomes: yes
+  connection: ssh
+  tasks: 
+    - name: Stop DB Container
+      shell: docker stop mysql-db || true
+
+    - name: Remove DB Container
+      shell: docker rm mysql-db || true

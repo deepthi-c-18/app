@@ -1,0 +1,15 @@
+---
+- name: deploy db
+  hosts: dev
+  user: ansible
+  become: yes
+  connection: ssh
+  tasks:
+    - name: Create Docker Network
+      shell: docker network create spring-network || true
+
+    - name: Pull Docker Image
+      shell: docker pull divya2057/springboot-db
+    
+    - name: Run MySQL Container
+      shell: docker run -it -d --name springboot-db --network spring-network -p 3306:3306 divya2057/springboot-db

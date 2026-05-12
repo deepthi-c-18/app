@@ -1,0 +1,23 @@
+---
+- name: upadate app
+  hosts: dev
+  user: ansible
+  become: yes
+  connection: ssh
+  tasks:
+
+    - name: Stop Old App Container
+      shell: docker stop springboot-app || true
+
+    - name: Remove Old App Container
+      shell: docker rm springboot-app || true
+
+    - name: Remove Old Image
+      shell: docker rmi divya2057/springboot-app:latest || true
+
+    - name: Pull Latest Image
+      shell: docker pull divya2057/springboot-app:latest
+
+    - name: Run Updated Container
+      shell: |
+        docker run -it -d --name springboot-app --network spring-network -p 8085:8085 divya2057/springboot-app:latest
