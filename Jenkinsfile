@@ -1,11 +1,13 @@
 pipeline{
     agent any
     parameters{
-        string(name: "UPDATE", defaultValue: "update.yml")
-        string(name: "REMOVE_DB", defaultValue: "remove_db.yml")
-        string(name: "REMOVE_APP", defaultValue: "remove_app.yml")
-        string(name: "DEPLOY_DB", defaultValue: "deploydb.yml")
-        string(name: "DEPLOY_APP", defaultValue: "deploy_app.yml")
+        choice(
+        name: 'PLAYBOOK',
+        choices: [
+            'update.yml','remove_db.yml','remove_app.yml','deploydb.yml','deploy_app.yml'
+        ],
+        description: 'Select and execute the playbook'
+    )
     }
     tools{
         maven 'maven'
@@ -81,108 +83,22 @@ pipeline{
                 }
             }
             }
-            stage("Update And Install"){
-                steps{
-                sshagent(['kkk-kkk']){
-                sh """
-                ansible-playbook ${params.UPDATE}
-                """
-                }
-                }
-                post{
-                success{
-                    echo "Successfully Installed"
-                }
-                failure{
-                    echo "Failed To Install"
-                }
-            }
-            }
-            stage("Remove DB Container"){
-                steps{
-                    sshagent(['kkk-kkk']){
-                sh """
-                    ansible-playbook ${params.REMOVE_DB}
-                """
-                }
-                }
-                post{
-                success{
-                    echo " successfully Removed DB "
-                }
-                failure{
-                    echo "Failed To Remove DB"
-                }
-            }
-            }
-            stage("Remove APP Container"){
-                steps{
-                    sshagent(['kkk-kkk']){
-                sh """
-                    ansible-playbook ${params.REMOVE_APP}
-                """
-                }
-                }
-                post{
-                success{
-                    echo " successfully Removed APP "
-                }
-                failure{
-                    echo "Failed To Remove APP"
-                }
-            }
-            }
-            stage("Deploy DB Container"){
-                steps{
-                    sshagent(['kkk-kkk']){
-                sh """
-                    ansible-playbook ${params.DEPLOY_DB}
-                """
-                }
-                }
-                post{
-                success{
-                    echo " successfully DB Deployed"
-                }
-                failure{
-                    echo "Failed To Deploy DB"
-                }
-            }
-            }
-            stage("Deploy APP Container"){
-                steps{
-                    sshagent(['kkk-kkk']){
-                sh """
-                    ansible-playbook ${params.DEPLOY_APP}
-                """
-                }
-                }
-                post{
-                success{
-                    echo " successfully APP Deployed"
-                }
-                failure{
-                    echo "Failed To Deploy APP"
-                }
+           stage("Run Selected Playbook"){
+    steps{
+        sshagent(['kkk-kkk']){
+            sh """
+            ansible-playbook ${params.PLAYBOOK}
+            """
+        }
+    }
+    post{
+        success{
+            echo "Playbook Executed Successfully"
+        }
+        failure{
+            echo "Failed To Execute Playbook"
+        }
+    }
+}
             }
     }
-    stage("Remove Img"){
-                steps{
-                    sshagent(['kkk-kkk']){
-                sh '''
-                    ansible prod -u ansible -m shell -a "docker rmi -f dhayananthd/app  dhayananthd/db" -b
-                '''
-                }
-                }
-                post{
-                success{
-                    echo " successfully Image Removed"
-                }
-                failure{
-                    echo "Failed To remove Image"
-                }
-            }
-    }
-
-}
-}
